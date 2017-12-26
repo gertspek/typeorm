@@ -7,6 +7,7 @@ import {RelationCountAttribute} from "./relation-count/RelationCountAttribute";
 import {Connection} from "../connection/Connection";
 import {EntityMetadata} from "../metadata/EntityMetadata";
 import {SelectQuery} from "./SelectQuery";
+import {DistinctAttribute} from "./DistinctAttribute";
 import {ColumnMetadata} from "../metadata/ColumnMetadata";
 import {RelationMetadata} from "../metadata/RelationMetadata";
 import {QueryBuilder} from "./QueryBuilder";
@@ -44,6 +45,11 @@ export class QueryExpressionMap {
      * Data needs to be SELECT-ed.
      */
     selects: SelectQuery[] = [];
+
+    /**
+     * Distincts to be SELECT-ed.
+     */
+    distinctOn: DistinctAttribute[] = [];
 
     /**
      * FROM-s to be selected.

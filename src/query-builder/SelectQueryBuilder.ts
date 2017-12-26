@@ -31,6 +31,7 @@ import {AbstractSqliteDriver} from "../driver/sqlite-abstract/AbstractSqliteDriv
 import {QueryResultCacheOptions} from "../cache/QueryResultCacheOptions";
 import {OffsetWithoutLimitNotSupportedError} from "../error/OffsetWithoutLimitNotSupportedError";
 import {BroadcasterResult} from "../subscriber/BroadcasterResult";
+import { DistinctAttribute } from "./DistinctAttribute";
 
 /**
  * Allows to build complex sql queries in a fashion way and execute those queries.
@@ -116,6 +117,24 @@ export class SelectQueryBuilder<Entity> extends QueryBuilder<Entity> implements 
             this.expressionMap.selects = [{ selection: selection, aliasName: selectionAliasName }];
         }
 
+        return this;
+    }
+
+    distinctOn(selection: string): this;
+
+    distinctOn(selection: string[]): this;
+
+    distinctOn(selection: string | string[]): this {
+        if (this.connection.driver instanceof PostgresDriver) {
+            if (selection instanceof Array) {
+                this.expressionMap.distinctOn = selection.map(selection => ({ selection: selection }));
+            } else if (selection) {
+                this.expressionMap.distinctOn = [{ selection: selection }];
+            }            
+        }
+        else {
+            throw new Error("DISTINCT ON is a Postgres feature, use group by instead.");
+        }
         return this;
     }
 
@@ -1309,6 +1328,7 @@ export class SelectQueryBuilder<Entity> extends QueryBuilder<Entity> implements 
 
         const allSelects: SelectQuery[] = [];
         const excludedSelects: SelectQuery[] = [];
+        const distinctOns: DistinctAttribute[] = [];
 
         if (this.expressionMap.mainAlias.hasMetadata) {
             const metadata = this.expressionMap.mainAlias.metadata;
@@ -1340,6 +1360,9 @@ export class SelectQueryBuilder<Entity> extends QueryBuilder<Entity> implements 
         if (allSelects.length === 0)
             allSelects.push({ selection: "*" });
 
+        this.expressionMap.distinctOn
+            .forEach(distinct => distinctOns.push({ selection: this.replacePropertyNames(distinct.selection)}));
+
         let lock: string = "";
         if (this.connection.driver instanceof SqlServerDriver) {
             switch (this.expressionMap.lockMode) {
@@ -1365,7 +1388,9 @@ export class SelectQueryBuilder<Entity> extends QueryBuilder<Entity> implements 
         if ((this.expressionMap.limit || this.expressionMap.offset) && this.connection.driver instanceof OracleDriver)
             return "SELECT ROWNUM " + this.escape("RN") + "," + selection + " FROM " + froms.join(", ") + lock;
 
-        return "SELECT " + selection + " FROM " + froms.join(", ") + lock;
+        const distinct = distinctOns.map(distinct => distinct.selection).join(", ");
+
+        return "SELECT " + ((distinct.length > 0) ? "DISTINCT ON (" + distinct + ")" : "") + selection + " FROM " + froms.join(", ") + lock;
     }
 
     /**
